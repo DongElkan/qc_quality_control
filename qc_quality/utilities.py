@@ -52,7 +52,41 @@ def element_isotope_dist2(mass, prob, n):
         c = log_binomial_coefficient(n, n - i)
         p = (n - i) * np.log(prob[0]) + i * np.log(prob[1])
         dist_int[i] = np.exp(c + p)
-    return dist_mass, dist_int
+
+    # keep top 10 peaks
+    k = dist_int.argmax()
+    j0 = max(k - 5, 0)
+    j1 = min(n + 1, k + 5)
+    return dist_mass[j0: j1], dist_int[j0: j1]
 
 
+@nb.njit("float64[:](int64[:,:], int64)", fastmath=True)
+def multinomial_coef_log(p, n):
+    """
+    Calculates multinomial coefficients, log transformed.
 
+    Args:
+        p: Matrix of No. of elements.
+        n: No.
+
+    Returns:
+        Array: coefficients.
+
+    """
+    # cumulative sum of log transformed range
+    logn = np.zeros(n, dtype=nb.float64)
+    for i in range(1, n):
+        logn[i] = logn[i - 1] + np.log(i + 1)
+    tn = logn[-1]
+
+    r, c = p.shape
+    coef = np.zeros(r, dtype=nb.float64)
+    for i in range(r):
+        sk = 0.
+        for j in range(c):
+            nk = p[i][j]
+            if nk > 0:
+                sk += logn[nk]
+        coef[i] = tn - sk
+
+    return coef
