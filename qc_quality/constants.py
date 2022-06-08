@@ -3,13 +3,13 @@ This module provides constants for the package.
 """
 import dataclasses
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any
 
 
 @dataclasses.dataclass
 class Isotope:
-    mass: float
-    prob: float
+    mass: Any
+    prob: Any
 
 
 ELEMENTS: Dict[str, Tuple[Isotope]] = {
@@ -302,3 +302,5 @@ ELEMENTS: Dict[str, Tuple[Isotope]] = {
           Isotope(235.0439301, 0.007204),
           Isotope(238.0507884, 0.992742))
 }
+
+PROTON: float = 1.007276466

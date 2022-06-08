@@ -2,8 +2,8 @@
 This module provides tools to generate the sets for calculating
 multinomial coefficients.
 
-The codes for permutation of multiset is copied from multipermute.
-
+The codes for permutation of multiset is copied from multipermute
+(https://github.com/ekg/multipermute).
 @copyright to Erik Garrison <erik.garrison@bc.edu> 2010
 
 Modified by Nai-ping Dong (naipdong@polyu.edu.hk)
@@ -53,8 +53,9 @@ def visit(h):
 
 def permutations(multiset):
     """Generator providing all multiset permutations of a multiset."""
+    perms = []
     h, i, j = init(multiset)
-    yield visit(h)
+    perms.append(visit(h))
     while j.nxt is not None or j.value < h.value:
         if j.nxt is not None and i.value >= j.nxt.value:
             s = j
@@ -67,7 +68,9 @@ def permutations(multiset):
             i = t
         j = i.nxt
         h = t
-        yield visit(h)
+        perms.append(visit(h))
+
+    return perms
 
 
 def partitions(n, m):
@@ -76,7 +79,7 @@ def partitions(n, m):
 
     Args:
          n: Int for partition.
-         m: No. of elements.
+         m: No. of isotopes.
 
     Returns:
         list: List of partitions.
@@ -116,9 +119,12 @@ def partitions(n, m):
     return c
 
 
-if __name__ == "__main__":
-    cx = partitions(20, 6)
-    ck = cx[20]
-    print(ck)
-    for p in permutations(ck):
-        print(p)
+# if __name__ == "__main__":
+#     cx = partitions(20, 6)
+#     cc = []
+#     for ck in cx:
+#         for p in permutations(ck):
+#             cc.append(p)
+#     print(len(cc))
+    # x = list(range(10))
+    # print(len(list(permutations(x))))
