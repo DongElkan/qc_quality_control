@@ -2,9 +2,11 @@ import dataclasses
 import collections
 import numpy as np
 
+from typing import Optional
+
 
 # XIC
-XIC = collections.namedtuple("XIC", ["mz", "tol", "xic"])
+XIC = collections.namedtuple("XIC", ["mz", "tol", "rt", "intensity"])
 
 
 @dataclasses.dataclass
@@ -12,15 +14,13 @@ class MassSpectrum:
     """
     Mass Spectrum object
     """
-    scan: int = None
-    spectrum: np.ndarray = None
-    rt: float = None
-    id: str = None
-    precursormz: float = None
-    charge: int = None
-    collision: str = None
-    energy: float = None
-    ms_level: int = None
-
-    def get(self, attr):
-        return self.__dict__.get(attr)
+    scan: Optional[int] = None
+    mz: Optional[np.ndarray] = None
+    intensity: Optional[np.ndarray] = None
+    rt: Optional[float] = None
+    id: Optional[str] = None
+    precursormz: Optional[float] = None
+    charge: Optional[int] = None
+    collision: Optional[str] = None
+    energy: Optional[float] = None
+    ms_level: Optional[int] = None

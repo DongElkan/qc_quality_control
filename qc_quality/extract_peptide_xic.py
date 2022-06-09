@@ -16,42 +16,7 @@ from scipy.optimize import OptimizeWarning
 
 import peak_analysis
 
-from readers.base import MassSpectrum
 from readers.mzml_reader import mzMLReader
-from readers.read_proteinpilot_summary import read_peptide_summary
-
-from rPTMDetermine.peptides import merge_seq_mods
-
-
-def _get_mgf(mgf):
-    """ Reads mass spectra from mgf files.
-    """
-    spectra = []
-    with open(mgf, "r") as f:
-        read_peak, c, rt = False, None, None
-        for line in tqdm.tqdm(f, desc=f"Load mass spectra from {mgf}"):
-            if line.startswith("TITLE"):
-                title = line.rstrip().split("=")[1]
-                peaks, read_peak = [], True
-            elif line.startswith("CHARGE"):
-                c = int(line.split("=")[1][0])
-            elif line.startswith("PEPMASS"):
-                pm_str = line.rstrip().split("=")[1]
-                pmz = None if pm_str == "none" else float(pm_str)
-            elif line.startswith("RTINSECONDS"):
-                rt = float(line.rstrip().split("=")[1]) / 60
-            elif line.startswith("END IONS"):
-                if peaks:
-                    peaks = np.array(peaks)
-                    ms_level = 1 if pmz is None else 2
-                    spectra.append(MassSpectrum(
-                        spectrum=peaks[peaks[:, 0].argsort(), :], id=title,
-                        charge=c, precursormz=pmz, ms_level=ms_level, rt=rt
-                    ))
-                read_peak, c, rt = False, None, None
-            elif read_peak:
-                peaks.append([float(s) for s in line.rstrip().split()[:2]])
-    return spectra
 
 
 def _peak_detection(peaks):
@@ -75,7 +40,7 @@ def _peak_detection(peaks):
     while i0 < n:
         v0 = diff_peaks[i0]
         for i, v in enumerate(diff_peaks[i0+1:]):
-            if v > 0 and v0 < 0:
+            if v > 0 > v0:
                 break
             v0 = v
 
