@@ -25,49 +25,43 @@ def _asymmetric_reweight(d):
     return 1 / (1 + np.exp(f))
 
 
-def rpls(x, method="adaptive", lambda_=100, derivative=2,
-         max_iter=100, tol=1e-3, wep=0.1, p=0.5):
+def rpls(x: np.ndarray,
+         method: str = "adaptive",
+         lambda_: int = 100,
+         derivative: int = 2,
+         max_iter: int = 100,
+         tol: float = 1e-3,
+         wep: float = 0.1,
+         p: float = 0.5) -> np.ndarray:
     """
     Adaptive iteratively re-weighted penalized least squares
     for baseline correction.
 
-    Parameters
-    ----------
-    x: np.ndarray
-        Chromatographic peak
-    method: str
-        Method for baseline correction. Two re-weighted penalized least
-        squares methods are are currently implemented:
-        "adaptive": adaptive iteratively
-        "asymmetric": asymmetrically
-        Default is "adaptive".
-    lambda_: int
-        Penalty for smoothing.
-    derivative: int
-        Derivative order, default is 2.
-    max_iter: int
-        Maximum iteration.
-    tol: float
-        Tolerance to stop iteration.
-    wep: float
-        The first and last wep * n data points to compensate,
-        where n is the number of points in x.
-    p: float
-        Weights for starting and ending points defined by wep
+    Args:
+        x: Chromatographic peak
+        method: Method for baseline correction. Two re-weighted
+            penalized least squares methods are currently implemented:
+                "adaptive": adaptive iteratively
+                "asymmetric": asymmetrically
+            Defaults to "adaptive".
+        lambda_: Penalty for smoothing.
+        derivative: Derivative order, default is 2.
+        max_iter: Maximum iteration.
+        tol: Tolerance to stop iteration.
+        wep: The first and last wep * n data points to compensate,
+            where n is the number of points in x.
+        p: Weights for starting and ending points defined by wep.
 
-    Returns
-    -------
-    z: np.ndarray
-        Fitted baseline.
+    Returns:
+        array: Fitted baseline.
 
-    References
-    ----------
-    [1] Zhang ZM, Chen S, Liang YZ. Baseline correction using adaptive
-        iteratively reweighted penalized least squares. Analyst. 2010,
-        135, 1138-1146.
-    [2] Baek SJ, Park A, Ahn YJ, Choo J. Baseline correction using
-        asymmetrically re-weighted penalized least squares smoothing.
-        Analyst. 2015, 140, 250-257
+    References:
+        [1] Zhang ZM, Chen S, Liang YZ. Baseline correction using
+            adaptive iteratively reweighted penalized least squares.
+            Analyst. 2010, 135, 1138-1146.
+        [2] Baek SJ, Park A, Ahn YJ, Choo J. Baseline correction using
+            asymmetrically re-weighted penalized least squares
+            smoothing. Analyst. 2015, 140, 250-257.
 
     """
     n = x.shape[0]

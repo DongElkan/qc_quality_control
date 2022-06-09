@@ -1,76 +1,61 @@
 """
 This module provides tools to generate the sets for calculating
-multinomial coefficients.
-
-The codes for permutation of multiset is copied from multipermute
-(https://github.com/ekg/multipermute).
-@copyright to Erik Garrison <erik.garrison@bc.edu> 2010
-
-Modified by Nai-ping Dong (naipdong@polyu.edu.hk)
-
-References:
-A Williams. Loopless Generation of Multiset Permutations using a
-Constant Number of Variables by Prefix Shifts. SODA '09: Proceedings of
-the twentieth annual ACM-SIAM symposium on Discrete algorithms. 2009,
-987–996.
+multinomial coefficients, and permute an array.
 
 """
-from typing import Union, Optional, Any
-import dataclasses
+import numba as nb
+import numpy as np
 
 
-@dataclasses.dataclass
-class ListElement:
-    value: Union[int, float]
-    nxt: Optional[Any]
+@nb.njit(["float64[:,:](float64[:])", "int64[:,:](int64[:])"])
+def permutation(x) -> np.ndarray:
+    """
+    Permutes array using plain changes.
 
-    def nth(self, n: int):
-        o = self
-        i = 0
-        while i < n and o.nxt is not None:
-            o = o.nxt
-            i += 1
-        return o
+    Args:
+        x: Array
 
+    Returns:
+        array: All permutations of the array.
 
-def init(multiset):
-    multiset.sort()
-    h = ListElement(multiset[0], None)
-    for item in multiset[1:]:
-        h = ListElement(item, h)
-    return h, h.nth(len(multiset) - 2), h.nth(len(multiset) - 1)
+    """
+    n = x.size
+    c = np.zeros(n, dtype=nb.int64)
 
+    # number of all permutations
+    nt = 1
+    for i in range(1, n + 1):
+        nt *= i
 
-def visit(h):
-    """Converts our bespoke linked list to a python list."""
-    o = h
-    v = []
-    while o is not None:
-        v.append(o.value)
-        o = o.nxt
-    return v
+    p = np.zeros((nt, n), dtype=x.dtype)
+    for i in range(n):
+        p[0][i] = x[i]
 
+    j = 1
+    k = 0
+    while j < n:
+        if c[j] < j:
+            if np.mod(j, 2) == 0:
+                jl = 0
+            else:
+                jl = c[j]
 
-def permutations(multiset):
-    """Generator providing all multiset permutations of a multiset."""
-    perms = []
-    h, i, j = init(multiset)
-    perms.append(visit(h))
-    while j.nxt is not None or j.value < h.value:
-        if j.nxt is not None and i.value >= j.nxt.value:
-            s = j
+            # swap
+            xl = x[jl]
+            x[jl] = x[j]
+            x[j] = xl
+
+            k += 1
+            for i in range(n):
+                p[k][i] = x[i]
+
+            c[j] += 1
+            j = 1
         else:
-            s = i
-        t = s.nxt
-        s.nxt = t.nxt
-        t.nxt = h
-        if t.value < h.value:
-            i = t
-        j = i.nxt
-        h = t
-        perms.append(visit(h))
+            c[j] = 0
+            j += 1
 
-    return perms
+    return p
 
 
 def partitions(n, m):
@@ -120,11 +105,16 @@ def partitions(n, m):
 
 
 # if __name__ == "__main__":
-#     cx = partitions(20, 6)
-#     cc = []
-#     for ck in cx:
-#         for p in permutations(ck):
-#             cc.append(p)
-#     print(len(cc))
+    # cx = partitions(20, 6)
+    # cc = []
+    # for ck in cx:
+    #     for p in permutations(ck):
+    #         cc.append(p)
+    # print(len(cc))
     # x = list(range(10))
     # print(len(list(permutations(x))))
+    # xx = np.arange(6).astype(np.int64)
+    # t = plain_change(xx)
+    # print(t.shape)
+    # for tk in t:
+    #     print(tk)

@@ -2,6 +2,7 @@
 This module provides a class for prediction of isotopic distribution.
 
 """
+import profile
 import re
 import collections
 import numpy as np
@@ -9,14 +10,14 @@ import numpy as np
 from numpy import ndarray
 from typing import Dict, Tuple, Optional
 
-from constants import ELEMENTS, PROTON, Isotope
-from utilities import (multinomial_coef_log,
-                       element_isotope_dist2,
-                       element_isotope_distn,
-                       element_dist_combine,
-                       centroid_mass,
-                       dot)
-from multipermute import partitions, permutations
+from .constants import ELEMENTS, PROTON, Isotope
+from .utilities import (multinomial_coef_log,
+                        element_isotope_dist2,
+                        element_isotope_distn,
+                        element_dist_combine,
+                        centroid_mass,
+                        dot)
+from .multipermute import partitions, permutation
 
 
 class IsotopeDistribution:
@@ -241,11 +242,10 @@ class IsotopeDistribution:
         mcoefs = multinomial_coef_log(parts2, n)
 
         # permute the mass and probability arrays for distribution
-        perms = permutations(list(range(k)))
+        perms = permutation(np.fromiter(range(k), np.int64))
         mass_perms = np.zeros((len(perms), k), dtype=np.float64)
         prob_perms = np.zeros((len(perms), k), dtype=np.float64)
-        for i, p in enumerate(perms):
-            ix = np.fromiter(p, np.int64)
+        for i, ix in enumerate(perms):
             mass_perms[i] = mass[ix]
             prob_perms[i] = prob[ix]
 
@@ -256,6 +256,7 @@ class IsotopeDistribution:
 if __name__ == "__main__":
     form = "C112H165N27O36"
     iso_predictor = IsotopeDistribution()
-    mx, dx = iso_predictor.predict(form)
-    for ii in range(mx.size):
-        print(f"{'%.6f' % mx[ii]} {'%.6f' % dx[ii]}")
+    profile.run("_ = iso_predictor.predict(form)")
+    # mx, dx = iso_predictor.predict(form)
+    # for ii in range(mx.size):
+    #     print(f"{'%.6f' % mx[ii]} {'%.6f' % dx[ii]}")
