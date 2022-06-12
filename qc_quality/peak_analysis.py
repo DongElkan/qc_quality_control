@@ -2,98 +2,92 @@
 Analysis of chromatographic peaks
 """
 import numpy as np
-from scipy import optimize, special
+import numba as nb
+import math
+
+from typing import Tuple
+from scipy import optimize
 
 
 _ = np.seterr(all='warn', over='raise', invalid='ignore')
 
 
+@nb.njit("float64[:](float64[:], float64, float64, float64, float64)",
+         fastmath=True)
 def _emg(x, h, sigma, mu, tau):
     """
     Fit exponentially modified gaussian function to simulate the
     shape of chromatographic peaks.
 
-    Parameters
-    ----------
-    x: np.ndarray
-        The peak for fitting
-    h: float
-        The amplitude of Gaussian
-    sigma: float
-        Gaussian variance
-    mu: float
-        Gaussian mean
-    tau: float
-        Exponent relaxation time
+    Args:
+        x: The peak for fitting
+        h: The amplitude of Gaussian
+        sigma: Gaussian variance
+        mu: Gaussian mean
+        tau: Exponent relaxation time
 
-    Returns
-    -------
-    y: np.ndarray
-        Fitted peak
+    Returns:
+        np.ndarray: Fitted peak.
 
-    References
-    ----------
-    [1] https://en.wikipedia.org/wiki/Exponentially_modified_Gaussian_distribution
-    [2] Kalambet Y, et al. J Chemometrics. 2011; 25, 352–356.
-    [3] Jeansonne MS, et al. J Chromatogr Sci. 1991, 29, 258-266.
+    References:
+        [1] wiki/Exponentially_modified_Gaussian_distribution
+        [2] Kalambet Y, et al. J Chemometrics. 2011; 25, 352–356.
+        [3] Jeansonne MS, et al. J Chromatogr Sci. 1991, 29, 258-266.
+
     """
-    # set up parameters
-    m = (x - mu) / sigma
+    n = x.size
+    y = np.zeros(n, dtype=nb.float64)
     c = sigma / tau
-    z = (c - m) / np.sqrt(2)
-    y = np.empty(z.shape)
-    ix = np.zeros(z.shape, dtype=bool)
-    # using log transform to calculate the values
-    if (z < 0).any():
-        ix[z < 0] = True
-        # gaussian
-        g = c * c / 2 - (m[ix] * c)
-        # exponential
-        e = np.log(h * c * np.sqrt(np.pi / 2)) + np.log(special.erfc(z[ix]))
-        y[ix] = g + e
+    sq2 = np.sqrt(2)
+    lk = np.log(h * c * np.sqrt(np.pi / 2))
+    for i in range(n):
+        m = (x[i] - mu) / sigma
+        z = (c - m) / sq2
+        if z > 6.71e7:
+            # to avoid overflow
+            s = np.log(h / (1 - m / c)) - m * m / 2
+        else:
+            if z < 0:
+                g = c * c / 2 - (m * c)
+            else:
+                g = -m * m / 2
+            e = lk + np.log(math.erfc(z))
+            s = g + e
 
-    if (z > 6.71e7).any():
-        ix[z > 6.71e7] = True
-        m2 = m[z > 6.71e7]
-        y[z > 6.71e7] = np.log(h / (1 - m2 / c)) - m2 * m2 / 2
+        if s >= -50:
+            y[i] = np.exp(min(s, 50))
 
-    ix = np.logical_not(ix)
-    if ix.any() > 0:
-        m2 = m[ix]
-        g = -m2 * m2 / 2
-        e = np.log(h * c * np.sqrt(np.pi / 2)) + np.log(special.erfcx(z[ix]))
-        y[ix] = g + e
-
-    return np.exp(np.clip(y, -200, 200))
+    return y
 
 
+@nb.njit("float64[:](float64[:], float64, float64, float64)", fastmath=True)
 def _gaussian(x, h, mu, sigma):
     """ Fit gaussian curve. """
-    y = ((x - mu) / sigma) ** 2 / 2
-    # avoid underflow error
-    return h * np.exp(-np.clip(y, -200, 200))
+    n = x.size
+    y = np.zeros(n, dtype=x.dtype)
+    for i in range(n):
+        s = -((x[i] - mu) / sigma) ** 2 / 2
+        if s > -50:
+            y[i] = h * np.exp(min(s, 50))
+    return y
 
 
-def fit_curve(rt, intensity, shape='emg'):
+def fit_curve(rt: np.ndarray, intensity: np.ndarray, shape: str = 'emg')\
+        -> Tuple[np.ndarray, np.ndarray]:
     """
     Fit the curve using scipy's curve_fit optimization.
 
-    Parameters
-    ----------
-    rt: np.ndarray
-        Retention time
-    intensity: np.ndarray
-        Peak intensities
-    shape: str
-        Function for fitting the peak. Accepted functions are:
-        "emg": exponentially modified gaussian function
-        "gau": gaussian function
-        Default is "emg".
+    Args:
+        rt: Retention time.
+        intensity: Peak intensities.
+        shape: Function for fitting the peak. {`emg`, `gaussian`}.
+            emg: exponentially modified gaussian function
+            gaussian: gaussian function
+            Defaults to `emg`.
 
-    Returns
-    -------
-    param: np.ndarray
-        Parameters for fitting the peak
+    Returns:
+        np.ndarray: Fitted peaks.
+        np.ndarray: Parameters for fitting the peak.
 
     """
     # initialization
@@ -111,27 +105,23 @@ def fit_curve(rt, intensity, shape='emg'):
         param, _ = optimize.curve_fit(_gaussian, rt, intensity, p0=(h0, m0, s0))
         return _gaussian(rt, *param), param
 
-    raise ValueError("Unrecognized shape for fitting. The shape must be "
-                     "`emg` or `gaussian`")
+    raise ValueError("Unrecognized shape for fitting. Expected `emg` or "
+                     f"`gaussian`, got {shape}.")
 
 
-def get_peak_param(rt, intensity):
+def get_peak_param(rt: np.ndarray, intensity: np.ndarray)\
+        -> Tuple[float, float, float]:
     """
     Get peak parameters, including peak width at half height,
     peak width at base and peak height.
 
-    Parameters
-    ----------
-    rt: np.ndarray
-        Retention time
-    intensity: np.ndarray
-        Peak intensities
+    Args:
+        rt: Retention time.
+        intensity: Peak intensities.
 
-    Returns
-    -------
-    param: tuple
-        A tuple of peak height, peak width at half height,
-        peak width at base
+    Returns:
+        tuple: A tuple of peak height, peak width at half height,
+            peak width at base.
 
     """
     h = intensity.max()

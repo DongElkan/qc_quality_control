@@ -2,7 +2,6 @@
 This module provides a class for prediction of isotopic distribution.
 
 """
-import profile
 import re
 import collections
 import numpy as np
@@ -253,10 +252,12 @@ class IsotopeDistribution:
         return element_isotope_distn(mcoefs, mass_perms, prob_perms, parts2)
 
 
-if __name__ == "__main__":
-    form = "C112H165N27O36"
-    iso_predictor = IsotopeDistribution()
-    profile.run("_ = iso_predictor.predict(form)")
+# if __name__ == "__main__":
+#     form = "SC112H165CN27O36"
+#     t = time.time()
+#     iso_predictor = IsotopeDistribution()
+#     print(f"{'%.8f' % (time.time() - t)} secs.")
+    # profile.run("_ = iso_predictor.predict(form)")
     # mx, dx = iso_predictor.predict(form)
     # for ii in range(mx.size):
     #     print(f"{'%.6f' % mx[ii]} {'%.6f' % dx[ii]}")

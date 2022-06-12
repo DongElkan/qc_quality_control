@@ -24,3 +24,4 @@ class MassSpectrum:
     collision: Optional[str] = None
     energy: Optional[float] = None
     ms_level: Optional[int] = None
+    peak_num: Optional[int] = None

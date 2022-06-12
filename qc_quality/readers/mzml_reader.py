@@ -25,7 +25,8 @@ NAME_PAIR = [
     ("precursormz", "selected ion m/z"),
     ("charge", "charge state"),
     ("collision", "collision"),
-    ("energy", "energy")
+    ("energy", "energy"),
+    ("peak_num", "peak_num")
 ]
 
 
@@ -60,6 +61,8 @@ class _ParseSpectrumElement:
 
     def _update(self):
         """ Updates the attributes. """
+        ms_params = self._get_param(self._element)
+        self._info.update(ms_params)
         self._info["id"] = self._element.get("id")
         self._info["index"] = int(self._element.get("index"))
         self.__dict__.update(self._info)
@@ -98,9 +101,9 @@ class _ParseSpectrumElement:
             ix = mz.argsort()
             self._info["mz"] = mz[ix]
             self._info["intensity"] = intens[ix]
+            self._info["peak_num"] = mz.size
         else:
-            self._info["mz"] = []
-            self._info["intensity"] = []
+            self._info["peak_num"] = 0
 
     def _get_collision(self):
         """ Gets the collision information """
@@ -332,7 +335,7 @@ class mzMLReader:
         intens = []
         for i in self._ms1_index:
             spec = self._spectra[i]
-            if spec.mz:
+            if spec.peak_num > 0:
                 i0, i1 = match_array(spec.mz, mz, tol)
                 intens.append(0. if i0 == i1
                               else spec.intensity[i0:i1].max())
