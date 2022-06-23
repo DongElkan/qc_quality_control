@@ -25,3 +25,5 @@ class MassSpectrum:
     energy: Optional[float] = None
     ms_level: Optional[int] = None
     peak_num: Optional[int] = None
+    max_intensity: Optional[float] = None
+    max_intensity_mz: Optional[float] = None

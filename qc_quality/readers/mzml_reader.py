@@ -15,7 +15,7 @@ except ImportError:
     import xml.etree.ElementTree as et
 
 
-NAME_PAIR = [
+NAMEPAIR = [
     ("scan", "index"),
     ("mz", "mz"),
     ("intensity", "intensity"),
@@ -26,7 +26,9 @@ NAME_PAIR = [
     ("charge", "charge state"),
     ("collision", "collision"),
     ("energy", "energy"),
-    ("peak_num", "peak_num")
+    ("peak_num", "peak_num"),
+    ("max_intensity", "base peak m/z"),
+    ("max_intensity_mz", "base peak intensity")
 ]
 
 
@@ -40,9 +42,7 @@ def _decode_binary(string: str,
     decoded = base64.b64decode(string)
     if decompress is not None:
         decoded = decompress(decoded)
-
     int_type = "d" if precision == 64 else "L"
-
     return struct.unpack(f"<{array_length}{int_type}", decoded)
 
 
@@ -176,6 +176,7 @@ class mzMLReader:
             mslevel: Mass spectrum level in the experiment. If is
                 set to None, all mass spectra specified by index
                 are output, regardless of the level.
+
         """
         if mslevel is not None:
             idx = match_index(self._ms_levels, mslevel)
@@ -219,7 +220,7 @@ class mzMLReader:
         if ms1_idx.size > 0:
             self._ms1_index = ms1_idx
 
-    def _get_scan_offsets(self, block_size=10240, fromstring=et.fromstring):
+    def _get_scan_offsets(self, block_size=10240):
         """
         Gets offsets. Use file.seek and file.read to get the offset
         block directly.
@@ -242,13 +243,13 @@ class mzMLReader:
         index = -1
         for line in f:
             if line.lstrip().startswith(b"<offset "):
-                el = fromstring(line)
+                el = et.fromstring(line)
                 index += 1
                 offsets[index] = int(el.text)
 
         return offsets
 
-    def _get_offsets_from_file(self, fromstring=et.fromstring):
+    def _get_offsets_from_file(self):
         """ Gets offsets from the file by reading the spectrum. """
         # get the number of spectra in the mzML file
         with open(self.mzml_file, "rb") as f:
@@ -258,7 +259,7 @@ class mzMLReader:
                     s = line.rstrip()
                     if not s.endswith(b"/>"):
                         s = s[:-1].decode('ascii')
-                    el = fromstring("".join([s, "/>"]))
+                    el = et.fromstring("".join([s, "/>"]))
                     n = int(el.get("count")) - 1
                     break
                 c = f.tell()
@@ -269,7 +270,7 @@ class mzMLReader:
             c = f.seek(c)
             for line in iter(f.readline, b""):
                 if line.lstrip().startswith(b"<spectrum "):
-                    el = fromstring(
+                    el = et.fromstring(
                         "".join([line.decode('ascii'), "</spectrum>"])
                     )
                     index = int(el.get("index"))
@@ -281,17 +282,15 @@ class mzMLReader:
 
         return offsets
 
-    def _read_spectrum(self, fromstring=et.fromstring):
+    def _read_spectrum(self):
         """ Gets mass spectra. """
-        offsets = self._offsets
-        indices = sorted(offsets.keys())
-
-        f = open(self.mzml_file, "rb")
-
+        indices = sorted(self._offsets.keys())
         # get spectra
-        spectra = []
+        spectra: List[MassSpectrum] = []
+        f = open(self.mzml_file, "rb")
         for i0, i1 in zip(indices[:-1], indices[1:]):
-            start, end = offsets.get(i0), offsets.get(i1)
+            start = self._offsets.get(i0)
+            end = self._offsets.get(i1)
 
             # get spectrum element
             f.seek(start, 0)
@@ -307,24 +306,20 @@ class mzMLReader:
                         if text_split[i].endswith(b"</spectrum>"):
                             break
                     text = b"\n".join(text_split[:i + 1])
-                blk = fromstring(text)
+                blk = et.fromstring(text)
 
                 # parse to get spectrum or XIC
                 spectrum = self._parse_spectrum(blk)
-                if spectrum is not None:
-                    spectra.append(spectrum)
-
+                spectra.append(spectrum)
         f.close()
 
         self._spectra = spectra
-        return self
 
     @staticmethod
-    def _parse_spectrum(spectrum_tree):
+    def _parse_spectrum(spectrum_tree) -> MassSpectrum:
         """ Get spectrum and XIC """
-        spec = _ParseSpectrumElement(spectrum_tree)
-        return MassSpectrum(
-            **{fd: getattr(spec, m, None) for fd, m in NAME_PAIR})
+        sp = _ParseSpectrumElement(spectrum_tree)
+        return MassSpectrum(**{fd: getattr(sp, m, None) for fd, m in NAMEPAIR})
 
     def _xic(self, mz, tol):
         """ Generates XIC according to matched peaks. """

@@ -105,7 +105,8 @@ def partitions(n, m):
 
 
 # if __name__ == "__main__":
-    # cx = partitions(20, 6)
+    # cx = partitions(2000, 6)
+    # print(len(cx))
     # cc = []
     # for ck in cx:
     #     for p in permutations(ck):
