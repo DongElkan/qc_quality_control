@@ -7,15 +7,14 @@ import tqdm
 
 from typing import List, Tuple
 
-from .readers.base import XIC
-
 from csaps import csaps
 from scipy.optimize import OptimizeWarning
 
-import peak_analysis
+from .readers.base import XIC
+from . import peak_analysis
 
 
-@nb.njit("int64[:,:](float64[:,:])")
+@nb.njit("int64[:,:](float64[:])")
 def peak_detection(peaks) -> np.ndarray:
     """
     Detects peaks using first derivatives.
@@ -27,8 +26,11 @@ def peak_detection(peaks) -> np.ndarray:
         array: Index of detected peak edges.
 
     """
-    diff_peaks = np.diff(peaks)
-    n = diff_peaks.size
+    n = peaks.size
+    intensity_diff = np.zeros(peaks.size - 1, dtype=np.float64)
+    for i in range(n - 1):
+        intensity_diff[i] = peaks[i + 1] - peaks[i]
+    n = intensity_diff.size
 
     # peak edges
     peak_edges = np.zeros((n, 2), dtype=nb.int64)
@@ -37,7 +39,7 @@ def peak_detection(peaks) -> np.ndarray:
     # starting point
     i0 = 0
     for i in range(n):
-        if diff_peaks[i] > 0:
+        if intensity_diff[i] > 0:
             i0 = i
             break
 
@@ -47,12 +49,12 @@ def peak_detection(peaks) -> np.ndarray:
     # gets peak edges
     i1 = i0
     while i0 < n:
-        v0 = diff_peaks[i0]
+        v0 = intensity_diff[i0]
         i = 0
         for i in range(i0 + 1, n):
-            if diff_peaks[i] > 0 > v0:
+            if intensity_diff[i] > 0 > v0:
                 break
-            v0 = diff_peaks[i]
+            v0 = intensity_diff[i]
 
         i1 = i + i0 + 1
         if i1 >= n - 1:
@@ -149,7 +151,7 @@ def extract_features(xics: List[XIC], thr: float)\
         # detects peaks using first derivatives
         peaks = peak_detection(np.fromiter(sm_intensity, np.float64))
 
-        # maps identified peptide retention times to XIC to extract peaks
+        # maps identified peptide retention times to XIC to extract
         for edge in peaks:
             il = edge[0]
             ir = edge[1]

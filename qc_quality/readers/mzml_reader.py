@@ -27,8 +27,8 @@ NAMEPAIR = [
     ("collision", "collision"),
     ("energy", "energy"),
     ("peak_num", "peak_num"),
-    ("max_intensity", "base peak m/z"),
-    ("max_intensity_mz", "base peak intensity")
+    ("max_intensity", "base peak intensity"),
+    ("max_intensity_mz", "base peak m/z")
 ]
 
 
@@ -146,6 +146,7 @@ class mzMLReader:
     This class reads mzML file.
 
     Args:
+        mzmlfile: mzML file name.
 
     """
     def __init__(self, mzmlfile: str):
