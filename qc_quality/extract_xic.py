@@ -86,7 +86,6 @@ def extract_top_mz(ms1_mz, ms1_intensity, tol, thr):
     sel_int = np.zeros(nsel, dtype=nb.float64)
     nms, nmz = ms1_mz.shape
     k = -1
-    min_int = 0.
     max_int = 0.
     for i in range(nms):
         for j in range(nmz):
@@ -95,32 +94,15 @@ def extract_top_mz(ms1_mz, ms1_intensity, tol, thr):
             if ink == 0:
                 break
 
-            if ink < thr or ink <= min_int:
+            if (ink <= sel_int[0] and k == nsel - 1) or ink < thr:
                 continue
 
-            if k < 0:
-                # the first
-                k += 1
-                sel_mz[k] = mzk
-                sel_int[k] = ink
-                min_int = ink
-                max_int = ink
-                continue
-
-            kend = k + 1
-            if ink > max_int:
-                ki = k
-                max_int = ink
-            else:
-                ki = np.searchsorted(sel_int[:kend], ink)
-                if sel_int[ki] == ink:
-                    continue
-
+            k2 = k + 1
             err = mzk * tol / 1e6
-            ix, nix = _check_in_mz(sel_mz[:kend], mzk, err)
+            ix, nix = _check_in_mz(sel_mz[:k2], mzk, err)
             if nix > 0:
                 # if is found in the m/z array, adjust the selected array
-                if ix[-1] > ki:
+                if sel_int[ix[-1]] >= ink:
                     # if the matched m/z in selected m/z array has higher
                     # intensity, ignore this.
                     continue
@@ -128,54 +110,39 @@ def extract_top_mz(ms1_mz, ms1_intensity, tol, thr):
                 # otherwise, this intensity is the highest among
                 # all matched m/z, then adjust the arrays
                 kj = 0
-                for ij in range(ix[0], kend):
+                for ij in range(ix[0], k2):
                     if ij in ix:
                         kj += 1
                     else:
                         sel_mz[ij - kj] = sel_mz[ij]
                         sel_int[ij - kj] = sel_int[ij]
-                sel_mz[kend - kj: kend] = 0.
-                sel_int[kend - kj: kend] = 0.
-                k = kend - kj
-                kend = k + 1
+                sel_mz[k2 - kj: k2] = 0.
+                sel_int[k2 - kj: k2] = 0.
+                k = k2 - kj
+                k2 = k + 1
 
-            if k == nsel - 1 and ki == k:
-                if sel_int[k] < ink:
-                    # put to the end
-                    sel_mz[:ki] = sel_mz[1: nsel]
-                    sel_int[:ki] = sel_int[1: nsel]
-                    sel_mz[ki] = mzk
-                    sel_int[ki] = ink
-                    print(sel_int[0], sel_int[-3:], max_int, ink, ki)
-                else:
-                    # insert next the end
-                    sel_mz[:ki - 1] = sel_mz[1: ki]
-                    sel_int[:ki - 1] = sel_int[1: ki]
-                    sel_mz[ki - 1] = mzk
-                    sel_int[ki - 1] = ink
-                min_int = sel_int[0]
+            if ink > max_int:
+                h = k + 1
+                max_int = ink
             else:
-                if k < nsel - 1:
-                    # add to the array
-                    sel_mz[ki + 1: kend + 1] = sel_mz[ki: kend]
-                    sel_int[ki + 1: kend + 1] = sel_int[ki: kend]
-                    sel_mz[ki] = mzk
-                    sel_int[ki] = ink
-                    if k == 0:
-                        print("-->", k, ki, kend, nix)
-                        print("-->", sel_int[0], sel_int[1], ink)
-                        # --> 0, 0, 1, 0
-                        # --> 883.9659423828125
-                        # 863.5442504882812
-                        # 883.9659423828125
-                    k += 1
-                else:
-                    sel_mz[:ki - 1] = sel_mz[1:ki]
-                    sel_int[:ki - 1] = sel_int[1:ki]
-                    sel_mz[ki - 1] = mzk
-                    sel_int[ki - 1] = ink
-                    min_int = sel_int[0]
-            print(k, ki, kend, nix)
+                h = np.searchsorted(sel_int[:k2], ink)
+                if sel_int[h] == ink:
+                    continue
+
+            # assign to the sorted arrays
+            if k == nsel - 1:
+                sel_int[:h - 1] = sel_int[1:h]
+                sel_mz[:h - 1] = sel_mz[1:h]
+                sel_int[h - 1] = ink
+                sel_mz[h - 1] = mzk
+            else:
+                k += 1
+                sel_mz[h + 1:k + 1] = sel_mz[h:k]
+                sel_int[h + 1:k + 1] = sel_int[h:k]
+                sel_mz[h] = mzk
+                sel_int[h] = ink
+
+            print(k, k2, nix)
             print(sel_int[0], sel_int[k], np.where(np.diff(sel_int[:k]) < 0))
         print(np.diff(sel_int).min(), sel_int[0], sel_int[-1])
         break
