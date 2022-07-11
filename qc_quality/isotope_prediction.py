@@ -23,6 +23,10 @@ class IsotopeDistribution:
     """
     This class predicts isotopic distribution and other methods.
 
+    Args:
+        resolving_power: Resolving power for generating the
+            distribution. This is defined at 10% valley.
+
     """
     def __init__(self, resolving_power=1e6):
         self.rp = resolving_power
@@ -32,29 +36,42 @@ class IsotopeDistribution:
 
         self.elem_compositions: Optional[Dict[str, int]] = None
 
-    def predict(self, formula: str, charge: Optional[int] = None)\
-            -> Tuple[ndarray, ndarray]:
+    def predict(self,
+                formula: str,
+                charge: Optional[int] = None,
+                ms_mode: str = "centroid") -> Tuple[ndarray, ndarray]:
         """
         Predicts isotopic distribution according to the formula.
 
         Args:
             formula: Formula of the molecule.
             charge: Charge of ions. If not have, leave it empty.
+            ms_mode: Mass spectrometry mode, {`centroid`, `profile`}.
+                `centroid`: Centroid mode.
+                `profile`: Profile mode.
 
         Returns:
             Array: m/z of the distribution.
             Array: Intensity of the distribution.
 
         """
+        if ms_mode not in ("centroid", "profile"):
+            raise ValueError("Unrecognized ms_mod argument. Expect `centroid`"
+                             f" and `profile`, got {ms_mode}.")
+
         iso_mass, iso_dist = self._predict(formula)
 
-        if charge is None:
-            return iso_mass, iso_dist
+        if charge is None or charge == 0:
+            if ms_mode == "centroid":
+                return iso_mass, iso_dist
+            return self._profile(iso_mass, iso_dist)
 
         # convert mass to charge
-        iso_mz = iso_mass / charge + PROTON
+        iso_mz = (iso_mass + (charge * PROTON)) / abs(charge)
 
-        return iso_mz, iso_dist
+        if ms_mode == "centroid":
+            return iso_mz, iso_dist
+        return self._profile(iso_mz, iso_dist)
 
     def monoisotopic_mass(self) -> float:
         """
@@ -69,7 +86,7 @@ class IsotopeDistribution:
                              "Call IsotopeDistribution.predict first.")
 
         m: float = 0.
-        for elem, n in self.elem_compositions.keys():
+        for elem, n in self.elem_compositions.items():
             iso = self._elements[elem]
             i = iso.prob.argmax()
             m += iso.mass[i] * n
@@ -89,7 +106,7 @@ class IsotopeDistribution:
                              "Call IsotopeDistribution.predict first.")
 
         m: float = 0.
-        for elem, n in self.elem_compositions.keys():
+        for elem, n in self.elem_compositions.items():
             iso = self._elements[elem]
             avg_m = dot(iso.mass, iso.prob) / iso.prob.sum()
             m += avg_m * n
@@ -131,7 +148,6 @@ class IsotopeDistribution:
         tmp_int = []
         for elem, n in self.elem_compositions.items():
             iso = self._elements[elem]
-            print(elem, iso)
             if iso.mass.size == 2:
                 m_dist, i_dist = element_isotope_dist2(iso.mass, iso.prob, n)
             elif iso.mass.size == 1:
@@ -174,36 +190,35 @@ class IsotopeDistribution:
                 "should only contain characters and numbers."
             )
 
-        fsplits = re.findall(r'(\w+?)(\d+)', formula)
+        fsplits = re.findall(r'[A-Z]|[a-z]|\d+', formula)
 
         # get element compositions
         elem_composite: Dict[str, int] = collections.defaultdict(int)
         inval_elem = []
-        for s, sn in fsplits:
-            if s in ELEMENTS:
-                elem_composite[s] += int(sn)
-                continue
+        i = 0
+        while i < len(fsplits):
+            elem = ""
+            n = 1
+            j = i
+            for s in fsplits[i:]:
+                if s.isupper() and elem:
+                    # has been processed
+                    break
 
-            if len(s) == 1:
-                inval_elem.append(s)
+                if s.isupper() or s.islower():
+                    elem += s
+                    j += 1
+                elif s.isdigit():
+                    n = int(s)
+                    j += 1
+                    break
+
+            if elem in ELEMENTS:
+                elem_composite[elem] += n
             else:
-                ss = []
-                sj = []
-                for sk in s:
-                    if sk.islower():
-                        sj.append(sk)
-                    else:
-                        if sj:
-                            ss.append("".join(sj))
-                            sj.clear()
-                        sj.append(sk)
+                inval_elem.append(elem)
 
-                ss.append("".join(sj))
-                for i, sk in enumerate(ss):
-                    if sk in ELEMENTS:
-                        elem_composite[sk] += int(sn) if i == len(ss)-1 else 1
-                    else:
-                        inval_elem.append(sk)
+            i = j
 
         # raise if exist invalid elements
         if inval_elem:
@@ -250,6 +265,42 @@ class IsotopeDistribution:
 
         # calculate distributions
         return element_isotope_distn(mcoefs, mass_perms, prob_perms, parts2)
+
+    def _profile(self, iso_mass, iso_dist):
+        """ Converts to profile mode for output. """
+        # for gaussian peak
+        u = iso_mass
+        s = u / (self.rp * np.sqrt(2 * np.log(10)))
+        # lowest intensity is set to 10^-8 of the highest peak intensity
+        delta_ms = s * np.sqrt(2 * 8 * np.log(10))
+
+        # isotopic distribution
+        if delta_ms.max() > 0.45:
+            # this is low resolution
+            i0 = iso_mass.argmin()
+            i1 = iso_mass.argmax()
+            ms_arr = np.linspace(iso_mass[i0] - delta_ms[i0],
+                                 iso_mass[i1] + delta_ms[i1], num=2000)
+            iso_dist_profiles = np.zeros(ms_arr.size)
+            for m, t, sk, dm in zip(iso_mass, iso_dist, s, delta_ms):
+                msk = ms_arr - m
+                gau_peak = (np.exp(- msk * msk / (2 * sk * sk))
+                            / (sk * np.sqrt(2 * np.pi)))
+                iso_dist_profiles += gau_peak / gau_peak.max() * t
+            return ms_arr, iso_dist_profiles
+
+        iso_dist_profiles = []
+        iso_mass_profile = []
+        for m, t, sk, dm in zip(iso_mass, iso_dist, s, delta_ms):
+            ms_arr = np.linspace(m - dm, m + dm, num=200)
+            msk = ms_arr - m
+            gau_peak = (np.exp(- msk * msk / (2 * sk * sk))
+                        / (sk * np.sqrt(2 * np.pi)))
+            iso_dist_profiles.append(gau_peak / gau_peak.max() * t)
+            iso_mass_profile.append(ms_arr)
+
+        return (np.concatenate(iso_mass_profile, axis=0),
+                np.concatenate(iso_dist_profiles, axis=0))
 
 
 # if __name__ == "__main__":
