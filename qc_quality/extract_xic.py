@@ -4,7 +4,7 @@ This module provides functions to extract XIC from LC-MS data.
 The algorithm is based on reference [1].
 
 References:
-    [1] Myers OD, et al., One Step Forward for Reducing False Positive
+    [1] Myers OD, et al., One-Step Forward for Reducing False Positive
         and False Negative Compound Identifications from Mass
         Spectrometry Metabolomics Data: New Algorithms for Constructing
         Extracted Ion Chromatograms and Detecting Chromatographic
@@ -171,51 +171,26 @@ def extract_xic(ms1_mz, ms1_intensity, nrecords, sel_mz, tol):
     xic = np.zeros((ns, nms), dtype=np.float64)
 
     # errors
-    errs = np.zeros(ns)
-    for i in range(ns):
-        errs[i] = sel_mz[i] * tol / 1e6
+    errs = sel_mz * tol / 1e6
+    mz_lo = sel_mz - errs
+    mz_hi = sel_mz + errs
 
     # extract XIC
-    for i in range(nms):
-        ix = np.searchsorted(ms1_mz[i][:nrecords[i]], sel_mz)
+    for i in nb.prange(nms):
+        lo = np.searchsorted(ms1_mz[i][:nrecords[i]], mz_lo)
+        hi = np.searchsorted(ms1_mz[i][:nrecords[i]], mz_hi, side='right')
         for j in range(ns):
-            a = ix[j]
-            mzk = sel_mz[j]
-            err = errs[j]
-            ink = 0.
-            # left side
-            jl = -1
-            for h in range(a - 1, -1, -1):
-                if ms1_mz[i][h] > 0:
-                    if mzk - ms1_mz[i][h] > err:
-                        break
+            if hi[j] > lo[j]:
+                ink = 0.
+                for h in range(lo[j], hi[j]):
                     if ms1_intensity[i][h] > ink:
                         ink = ms1_intensity[i][h]
-                    jl = h
-            # right side
-            jr = -1
-            for h in range(a, nrecords[i]):
-                if ms1_mz[i][h] > 0:
-                    if ms1_mz[i][h] - mzk > err:
-                        break
-                    if ms1_intensity[i][h] > ink:
-                        ink = ms1_intensity[i][h]
-                    jr = h + 1
-            xic[j][i] = ink
 
-            # if matched, clear the intensity that have been matched
-            if jl >= 0 or jr >= 0:
-                if jl >= 0:
-                    j0 = jl
-                else:
-                    j0 = a
-                if jr >= 0:
-                    j1 = jr
-                else:
-                    j1 = a
+                # if matched, clear the intensity that have been matched
+                ms1_mz[i][lo[j]:hi[j]] = 0.
+                ms1_intensity[i][lo[j]:hi[j]] = 0.
 
-                ms1_mz[i][j0:j1] = 0.
-                ms1_intensity[i][j0:j1] = 0.
+                xic[j][i] = ink
 
     return xic, ms1_mz, ms1_intensity
 

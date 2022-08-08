@@ -26,10 +26,7 @@ def peak_detection(peaks) -> np.ndarray:
         array: Index of detected peak edges.
 
     """
-    n = peaks.size
-    intensity_diff = np.zeros(peaks.size - 1, dtype=np.float64)
-    for i in range(n - 1):
-        intensity_diff[i] = peaks[i + 1] - peaks[i]
+    intensity_diff = peaks[1:] - peaks[:-1]
     n = intensity_diff.size
 
     # peak edges
@@ -50,28 +47,27 @@ def peak_detection(peaks) -> np.ndarray:
     i1 = i0
     while i0 < n:
         v0 = intensity_diff[i0]
-        i = 0
+        i1 = i0 + 1
         for i in range(i0 + 1, n):
-            if intensity_diff[i] > 0 > v0:
+            if intensity_diff[i] >= 0 > v0:
+                i1 = i
                 break
             v0 = intensity_diff[i]
 
-        i1 = i + i0 + 1
         if i1 >= n - 1:
             break
 
-        if i1 + 1 - i0 >= 5:
+        if i1 - i0 >= 5:
             peak_edges[k][0] = i0
             peak_edges[k][1] = i1 + 1
             k += 1
         i0 = i1
 
-    if i1 > i0:
+    if i1 - i0 >= 5:
         peak_edges[k][0] = i0
         peak_edges[k][1] = i1 + 1
         k += 1
 
-    # quality control
     return peak_edges[:k]
 
 
@@ -147,9 +143,9 @@ def extract_features(xics: List[XIC], thr: float)\
     features = []
     for xic in tqdm.tqdm(xics, desc="Extracting features"):
         # smooth of intensity
-        sm_intensity = csaps(xic.rt, xic.intensity, xic.rt, smooth=0.99)
+        sm_intensity = csaps(xic.rt, xic.intensity, xic.rt, smooth=0.99999)
         # detects peaks using first derivatives
-        peaks = peak_detection(np.fromiter(sm_intensity, np.float64))
+        peaks = peak_detection(sm_intensity.astype(np.float64))
 
         # maps identified peptide retention times to XIC to extract
         for edge in peaks:
