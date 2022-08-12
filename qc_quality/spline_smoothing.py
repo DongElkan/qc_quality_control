@@ -324,6 +324,35 @@ def coef_predict(x, coefs, intervals, g) -> np.ndarray:
     return p
 
 
+@nb.njit("float64[:](float64[:], float64[:,:], float64, float64)")
+def predict_out_range(x, coefs, b0, bn):
+    """
+    Predicts x out range of the bounds in fitting.
+
+    Args:
+        x: x
+        coefs: Coefficients.
+        b0: Left bound.
+        bn: Right bound.
+
+    Returns:
+        array: Predicted array.
+
+    """
+    n = x.size
+    p = np.zeros(n, dtype=np.float64)
+    cn_a = coefs[0][-1]
+    cn_b = coefs[1][-1]
+    c0_a = coefs[0][0]
+    c0_b = coefs[1][0]
+    for i in range(n):
+        if x[i] > bn:
+            p[i] = cn_a + (x[i] - bn) * cn_b
+        else:
+            p[i] = c0_a + (x[i] - b0) * c0_b
+    return p
+
+
 @nb.njit("float64[:](float64[:], float64[:], float64[:], float64[:])")
 def predict(x, g, d, intervals) -> np.ndarray:
     """
@@ -495,7 +524,19 @@ class SplineSmoothing:
                                "run the fit in advance.")
         x = self._check_pred_x(x)
 
-        return predict(x, self._best_fit, self._d2, self._x)
+        b0 = self._x[0]
+        bn = self._x[-1]
+        ix = (x >= b0) & (x <= bn)
+        yp = np.zeros_like(x)
+
+        # do prediction
+        if ix.any():
+            yp[ix] = predict(x[ix], self._best_fit, self._d2, self._x)
+
+        if not ix.all():
+            yp[~ix] = predict_out_range(x[~ix], self._coefficients, b0, bn)
+
+        return yp
 
     def _fit(self, x, y) -> np.ndarray:
         """ Smooths the arrays. """
@@ -607,52 +648,7 @@ class SplineSmoothing:
         if (xd <= 0).any():
             raise ValueError("The knots array x must be strictly increasing.")
 
-    def _check_pred_x(self, x):
-        """
-        Checks x for prediction. This prediction only allow all x
-        values in the range of x for constructing smoothing splines.
-
-        Raises:
-            ValueError
-
-        """
-        x0 = self._x.min(initial=None)
-        xm = self._x.max(initial=None)
-        if x.min(initial=None) < x0 or x.max(initial=None) > xm:
-            raise ValueError("Values in array for prediction are out of "
-                             "range for fitting, which is not currently "
-                             "implemented.")
-
+    @staticmethod
+    def _check_pred_x(x):
+        """ Checks x and returns x as float64 for calculation. """
         return x.astype(np.float64)
-
-#
-# if __name__ == "__main__":
-#
-#     import matplotlib.pyplot as plt
-#
-#     areas = []
-#     with open(r"../tests/curve_data.txt", "r") as f:
-#         for line in f:
-#             areas.append(float(line.rstrip()))
-#     areas = np.fromiter(areas, np.float64)
-#     areas /= np.median(areas)
-#
-#     xx = np.arange(areas.size)
-#     jx = np.fromiter([*[i * 10 for i in range(17)], 165], np.int64)
-#
-#     spline = SplineSmoothing(criteria="aicc")
-#     yp = spline.fit(jx, areas[jx])
-#
-#     fig = plt.figure(1)
-#     ax = fig.add_subplot()
-#     scores = np.array([list(s) for s in spline.gcv_scores])
-#     ax.plot(np.log10(scores[:, 0]), scores[:, 1], c="firebrick")
-#
-#     yp_2 = spline.predict(xx)
-#
-#     fig = plt.figure(2)
-#     ax = fig.add_subplot()
-#     ax.plot(xx, areas, ".", ms=3., c="k")
-#     ax.plot(jx, yp, "o", linestyle="none", c="firebrick", mfc="none")
-#     ax.plot(xx, yp_2, c="darkgreen", lw=2.)
-#     plt.show()
